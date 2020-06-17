@@ -124,7 +124,7 @@ def print_all_raw_data():
     """
     conn = sqlite3.connect(get_current_db_file_path())
     c = conn.cursor()
-    results = c.execute("SELECT * FROM raw_data WHERE found_at_date = 'a';")
+    results = c.execute("SELECT * FROM raw_data;")
     rows = results.fetchall()
     for row in rows:
         print(row)
