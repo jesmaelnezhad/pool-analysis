@@ -131,6 +131,23 @@ def print_all_raw_data():
     print("Count: ", len(rows))
 
 
+def get_duration_and_block_number(limit=100):
+    """
+    Selects and returns the duration and block_number of all records
+    :return: None
+    """
+
+    data_rows = []
+
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT duration, block_no FROM raw_data LIMIT {};".format(limit))
+    rows = results.fetchall()
+    for row in rows:
+        data_rows.append(row)
+    return data_rows
+
+
 def insert_raw_data(found_at_date, found_at_time, duration,
                     hash_rate, difficulty, luck,
                     block_no, block_value, confirm_left):
