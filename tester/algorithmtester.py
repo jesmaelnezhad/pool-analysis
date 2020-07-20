@@ -1,6 +1,9 @@
 from utility import logger
+import math
 
 TICK_DURATION_SECONDS = 4
+VALID_PRICE_CHANGE_GAP = 10 * 60
+LIMIT_CHANGE_DELAY = 10 * 60
 
 
 class RuntimeTickInfo:
@@ -18,6 +21,8 @@ class RuntimeTickInfo:
         self.operations = []
         # tags that can be used in the operation
         self.tags = []
+        # price and limit changes to be applied in this tick
+        self.limit_change = 0
 
     def __str__(self):
         return "Tick info: block no={0} / time since start={1} / time of block passed={2} " \
@@ -62,8 +67,10 @@ class AlgorithmTester:
         self.Data = data
         self.Algorithm = algorithm
         self.RuntimeTicks = []
+        self.current_run_tick_index = 0
         # Nice hash order properties
         self.nice_hash_order_price = 0
+        self.last_price_change_time_since_start = None
         self.nice_hash_order_limit = 0
 
     def __str__(self):
@@ -72,18 +79,79 @@ class AlgorithmTester:
         """
         return "Tester object on %d blocks with algorithm %s".format(len(self.Data), str(self.Algorithm))
 
-    def nice_hash_api_edit_order(self, price, limit):
+    def nice_hash_api_edit_order_price(self, price):
         """
         Sets the price on our imaginary order on nicehash
+        :return: Boolean: True if successful in changing the order, and False if unable to change the order
+        (for example if we have changed price less than 10 minutes ago we cannot change it now)
+        """
+        # Price change
+        # Check the last price change is >= 10 minutes ago
+        current_time_since_start = self.RuntimeTicks[self.current_run_tick_index].time_since_start_in_seconds
+        if self.last_price_change_time_since_start is None:
+            self.last_price_change_time_since_start = current_time_since_start
+            self.nice_hash_order_price = price
+        else:
+            if current_time_since_start - self.last_price_change_time_since_start < VALID_PRICE_CHANGE_GAP:
+                return False
+            else:
+                self.last_price_change_time_since_start = current_time_since_start
+                self.nice_hash_order_price = price
+        return True
+
+    def nice_hash_api_edit_order_limit(self, limit):
+        """
+        Changes the following ticks so that we reach to the given limit in the following 10 minutes
+        :param limit: the requested limit to reach to over 10 minutes
         :return: None
         """
-        self.nice_hash_order_price, self.nice_hash_order_limit = price, limit
+        # 0. Special case: if this is the last tick, limit cannot change.
+        if self.current_run_tick_index == len(self.RuntimeTicks)-1:
+            return
+        # 1. check the limit after 10 minutes
+        involved_ticks = []
+        next_tick_time_since_start = self.RuntimeTicks[self.current_run_tick_index + 1].time_since_start_in_seconds
+        for tick_index in range(self.current_run_tick_index + 1, len(self.RuntimeTicks)):
+            tick_time_since_start = self.RuntimeTicks[tick_index].time_since_start_in_seconds
+            if tick_time_since_start - next_tick_time_since_start > LIMIT_CHANGE_DELAY:
+                break
+            involved_ticks.append(self.RuntimeTicks[tick_index])
+        order_limit = self.nice_hash_order_limit
+        for involved_tick in involved_ticks:
+            order_limit += involved_tick.limit_change
+        # 2. calculate total needed limit change and limit_change in every tick if it is going to happen
+        #    over 10 minutes
+        total_limit_change = limit - order_limit
+        number_of_ticks_to_distribute_change = math.ceil(LIMIT_CHANGE_DELAY / TICK_DURATION_SECONDS)
+        change_per_tick = total_limit_change * 1.0 / number_of_ticks_to_distribute_change
+        # 3. Add the limit_change to happen in the following ticks
+        start_index = self.current_run_tick_index + 1
+        end_index = min(len(self.RuntimeTicks), start_index + number_of_ticks_to_distribute_change)
+        for tick_index in range(start_index, end_index):
+            self.RuntimeTicks[tick_index].limit_change += change_per_tick
 
-    def nice_hash_api_get_order(self):
+        return True
+
+    def nice_hash_api_get_order_price(self):
         """
         :returns the price on our imaginary order on nicehash
         """
-        return self.nice_hash_order_price, self.nice_hash_order_limit
+        return self.nice_hash_order_price
+
+    def nice_hash_api_get_order_limit(self):
+        """
+        :returns the limit on our imaginary order on nicehash
+        """
+        return self.nice_hash_order_limit
+
+    def runtime_update_order_on_tick(self, tester, tick_info):
+        """
+        If any gradual move on price or limit of the order exists in this tick, it is applied in this method.
+        :param tester: usually equal to self. The tester object responsible for nice_hash api
+        :param tick_info: the information of the current tick at which the function is called
+        :return: None
+        """
+        self.nice_hash_order_limit = self.nice_hash_order_limit + tick_info.limit_change
 
     def set_tag_at(self, time_since_start, tag):
         """
@@ -109,7 +177,9 @@ class AlgorithmTester:
         # pre tick
         self.Algorithm.pre_ticks(self)
         # run ticks
-        for tick in self.RuntimeTicks:
+        for tick_index in range(len(self.RuntimeTicks)):
+            self.current_run_tick_index = tick_index
+            tick = self.RuntimeTicks[tick_index]
             tick.run(self)
         # post tick
         self.Algorithm.post_ticks(self)
@@ -130,6 +200,7 @@ class AlgorithmTester:
                            len(self.RuntimeTicks) * TICK_DURATION_SECONDS,
                                            duration == block_duration, duration <= TICK_DURATION_SECONDS)
                 # run operation
+                new_tick.add_operation(self.runtime_update_order_on_tick)
                 new_tick.add_operation(self.Algorithm.tick)
                 # Record the tick
                 self.RuntimeTicks.append(new_tick)
