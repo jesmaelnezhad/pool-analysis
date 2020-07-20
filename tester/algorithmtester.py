@@ -5,6 +5,23 @@ TICK_DURATION_SECONDS = 4
 VALID_PRICE_CHANGE_GAP = 10 * 60
 LIMIT_CHANGE_DELAY = 10 * 60
 
+COST_PER_TERA_HASH_PER_HOUR = 2.08 / 500
+COST_PER_TERA_HASH_PER_TICK = COST_PER_TERA_HASH_PER_HOUR / (60 * 60 / TICK_DURATION_SECONDS)
+
+REWARD_PER_SOLVE_PER_TERA_HASH = 7.0 / 500
+
+TIME_UNIT_HOURS = "hours"
+TIME_UNIT_MINUTES = "minutes"
+TIME_UNIT_SECONDS = "seconds"
+
+
+def hours(h):
+    return h * 60 * 60
+
+
+def minutes(m):
+    return m * 60
+
 
 class RuntimeTickInfo:
     def __init__(self, block_number, time_since_block_start_in_seconds, time_since_start_in_seconds,
@@ -26,10 +43,12 @@ class RuntimeTickInfo:
 
     def __str__(self):
         return "Tick info: block no={0} / time since start={1} / time of block passed={2} " \
-               "/ block start={3} / block end={4} / tags={5}".format(self.block_number, self.time_since_start_in_seconds,
-                                                        self.time_since_block_start_in_seconds,
-                                                        self.is_block_starting_point, self.is_block_ending_point,
-                                                        self.tags)
+               "/ block start={3} / block end={4} / tags={5}".format(self.block_number,
+                                                                     self.time_since_start_in_seconds,
+                                                                     self.time_since_block_start_in_seconds,
+                                                                     self.is_block_starting_point,
+                                                                     self.is_block_ending_point,
+                                                                     self.tags)
 
     def add_operation(self, operation):
         """
@@ -56,6 +75,23 @@ class RuntimeTickInfo:
         for op in self.operations:
             op(tester, self)
 
+    def has_passed_exactly(self, time, time_unit=TIME_UNIT_HOURS):
+        """
+        Returns whether or not exactly 'time' seconds has passed since the beginning of this block at this tick
+        :param time_unit: time unit
+        :param time: time to check in seconds
+        :return: True if we are in the tick where exactly time seconds has passed since the beginning of the block
+        """
+        time_in_seconds = None
+        if time_unit == TIME_UNIT_HOURS:
+            time_in_seconds = hours(time)
+        elif time_unit == TIME_UNIT_MINUTES:
+            time_in_seconds = minutes(time)
+        elif time_unit == TIME_UNIT_SECONDS:
+            time_in_seconds = time
+
+        return self.time_since_block_start_in_seconds <= time_in_seconds < self.time_since_block_start_in_seconds + TICK_DURATION_SECONDS
+
 
 class AlgorithmTester:
     def __init__(self, data, algorithm):
@@ -72,6 +108,9 @@ class AlgorithmTester:
         self.nice_hash_order_price = 0
         self.last_price_change_time_since_start = None
         self.nice_hash_order_limit = 0
+
+        self.total_cost = 0
+        self.total_reward = 0
 
     def __str__(self):
         """
@@ -106,7 +145,7 @@ class AlgorithmTester:
         :return: None
         """
         # 0. Special case: if this is the last tick, limit cannot change.
-        if self.current_run_tick_index == len(self.RuntimeTicks)-1:
+        if self.current_run_tick_index == len(self.RuntimeTicks) - 1:
             return
         # 1. check the limit after 10 minutes
         involved_ticks = []
@@ -153,6 +192,20 @@ class AlgorithmTester:
         """
         self.nice_hash_order_limit = self.nice_hash_order_limit + tick_info.limit_change
 
+    def runtime_cost_and_reward(self, tester, tick_info):
+        """
+        Updates the total cost and reward based on what happens in the given tick
+        :param tester:
+        :param tick_info:
+        :return:
+        """
+        # update reward if a block is finished
+        current_limit = tester.nice_hash_api_get_order_limit()
+        if tick_info.is_block_ending_point:
+            self.total_reward += current_limit * REWARD_PER_SOLVE_PER_TERA_HASH
+        # update cost based on the limit in this tick
+        self.total_cost += current_limit * COST_PER_TERA_HASH_PER_TICK
+
     def set_tag_at(self, time_since_start, tag):
         """
 
@@ -184,6 +237,11 @@ class AlgorithmTester:
         # post tick
         self.Algorithm.post_ticks(self)
 
+        # print cost and reward
+        logger_object.info("Cost: {0:.3f} - Reward: {1:0.3f} - R/C%: {2:.3f}".format(self.total_cost, self.total_reward,
+                                                                                     (
+                                                                                                 self.total_reward * 100) / self.total_cost))
+
     def prepare_to_run(self):
         """
         Prepares the object for a run
@@ -197,11 +255,12 @@ class AlgorithmTester:
             duration = block_duration
             while duration > 0:
                 new_tick = RuntimeTickInfo(block_number, block_duration - duration,
-                           len(self.RuntimeTicks) * TICK_DURATION_SECONDS,
+                                           len(self.RuntimeTicks) * TICK_DURATION_SECONDS,
                                            duration == block_duration, duration <= TICK_DURATION_SECONDS)
                 # run operation
                 new_tick.add_operation(self.runtime_update_order_on_tick)
                 new_tick.add_operation(self.Algorithm.tick)
+                new_tick.add_operation(self.runtime_cost_and_reward)
                 # Record the tick
                 self.RuntimeTicks.append(new_tick)
                 # Move time forward
