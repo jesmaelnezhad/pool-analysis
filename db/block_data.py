@@ -5,6 +5,10 @@ from datetime import datetime
 
 from utility import logger
 
+COL_BLOCK_NO = "block_no"
+COL_DURATION = "duration"
+COL_BLOCK_VALUE = "block_value"
+
 
 def set_current_db_pointer(db_name):
     """
@@ -131,7 +135,7 @@ def print_all_raw_data():
     print("Count: ", len(rows))
 
 
-def get_duration_and_block_number(limit=100):
+def get_columns(columns, limit=100):
     """
     Selects and returns the duration and block_number of all records
     :return: None
@@ -141,7 +145,7 @@ def get_duration_and_block_number(limit=100):
 
     conn = sqlite3.connect(get_current_db_file_path())
     c = conn.cursor()
-    results = c.execute("SELECT duration, block_no FROM raw_data LIMIT {};".format(limit))
+    results = c.execute(("SELECT " + ",".join(columns) + " FROM raw_data LIMIT {};").format(limit))
     rows = results.fetchall()
     for row in rows:
         data_rows.append(row)

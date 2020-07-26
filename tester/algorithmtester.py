@@ -1,3 +1,4 @@
+from db.block_data import COL_DURATION, COL_BLOCK_NO, COL_BLOCK_VALUE
 from utility import logger
 import math
 
@@ -5,10 +6,11 @@ TICK_DURATION_SECONDS = 4
 VALID_PRICE_CHANGE_GAP = 10 * 60
 LIMIT_CHANGE_DELAY = 10 * 60
 
-COST_PER_TERA_HASH_PER_HOUR = 2.08 / 500
+
+COST_PER_TERA_HASH_PER_HOUR = 0.0000084 / 24
 COST_PER_TERA_HASH_PER_TICK = COST_PER_TERA_HASH_PER_HOUR / (60 * 60 / TICK_DURATION_SECONDS)
 
-REWARD_PER_SOLVE_PER_TERA_HASH = 7.0 / 500
+REWARD_PER_SOLVE_PER_TERA_HASH_PER_BLOCK_VALUE = 1 / (4.53 * 1000 * 1000)
 
 TIME_UNIT_HOURS = "hours"
 TIME_UNIT_MINUTES = "minutes"
@@ -23,13 +25,17 @@ def minutes(m):
     return m * 60
 
 
+TICK_INFO_NEEDED_COLUMNS = [COL_DURATION, COL_BLOCK_NO, COL_BLOCK_VALUE]
+
+
 class RuntimeTickInfo:
-    def __init__(self, block_number, time_since_block_start_in_seconds, time_since_start_in_seconds,
+    def __init__(self, block_number, block_value, time_since_block_start_in_seconds, time_since_start_in_seconds,
                  is_block_starting_point=False, is_block_ending_point=False):
         """
         Initializes an object which represents a tick (a tiny step) in the execution of an algorithm
         """
         self.block_number = block_number
+        self.block_value = block_value
         self.time_since_block_start_in_seconds = time_since_block_start_in_seconds
         self.time_since_start_in_seconds = time_since_start_in_seconds
         self.is_block_starting_point = is_block_starting_point
@@ -202,7 +208,7 @@ class AlgorithmTester:
         # update reward if a block is finished
         current_limit = tester.nice_hash_api_get_order_limit()
         if tick_info.is_block_ending_point:
-            self.total_reward += current_limit * REWARD_PER_SOLVE_PER_TERA_HASH
+            self.total_reward += current_limit * REWARD_PER_SOLVE_PER_TERA_HASH_PER_BLOCK_VALUE * tick_info.block_value
         # update cost based on the limit in this tick
         self.total_cost += current_limit * COST_PER_TERA_HASH_PER_TICK
 
@@ -252,9 +258,10 @@ class AlgorithmTester:
         for block_data in reversed(self.Data):
             block_duration = block_data[0]
             block_number = block_data[1]
+            block_value = block_data[2]
             duration = block_duration
             while duration > 0:
-                new_tick = RuntimeTickInfo(block_number, block_duration - duration,
+                new_tick = RuntimeTickInfo(block_number, block_value, block_duration - duration,
                                            len(self.RuntimeTicks) * TICK_DURATION_SECONDS,
                                            duration == block_duration, duration <= TICK_DURATION_SECONDS)
                 # run operation
