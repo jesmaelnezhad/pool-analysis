@@ -86,15 +86,13 @@ def init_block_data_db():
     c = conn.cursor()
     # Create main data table
     c.execute('''
-    CREATE TABLE IF NOT EXISTS raw_data(found_at_date TEXT, 
-    found_at_time TEXT, 
-    duration INT, 
-    hash_rate REAL, 
-    difficulty BIGINT, 
-    luck REAL, 
-    block_no INT, 
-    block_value DOUBLE PRECISION, 
-    confirm_left TEXT);
+    CREATE TABLE IF NOT EXISTS raw_data(date_found_unix BIGINT,
+    found_at_date TEXT,
+    found_at_time TEXT,
+    duration INT,
+    hash_rate INT,
+    block_no INT NOT NULL PRIMARY KEY,
+    block_value DOUBLE PRECISION);
     ''')
     # Create views
     c.execute('''
@@ -111,9 +109,7 @@ def init_block_data_db():
     found_at_date, 
     COUNT(found_at_date) AS block_count, 
     AVG(duration) AS duration, 
-    AVG(hash_rate) AS hash_rate, 
-    AVG(difficulty) AS difficulty, 
-    AVG(luck) AS luck, 
+    AVG(hash_rate) AS hash_rate,
     AVG(block_value) AS block_value 
     FROM raw_data GROUP BY found_at_date ORDER BY found_at_date;
     ''')
@@ -152,17 +148,16 @@ def get_columns(columns, limit=100):
     return data_rows
 
 
-def insert_raw_data(found_at_date, found_at_time, duration,
-                    hash_rate, difficulty, luck,
-                    block_no, block_value, confirm_left):
+def insert_raw_data(date_found_unix, found_at_date, found_at_time, duration,
+                    hash_rate, block_no, block_value):
     """
     Insert a new raw record
     :return: None
     """
     conn = sqlite3.connect(get_current_db_file_path())
     c = conn.cursor()
-    c.execute("INSERT INTO raw_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-              [found_at_date, found_at_time, duration, hash_rate, difficulty, luck, block_no, block_value, confirm_left]
+    c.execute("INSERT INTO raw_data VALUES (?, ?, ?, ?, ?, ?, ?);",
+              [date_found_unix, found_at_date, found_at_time, duration, hash_rate, block_no, block_value]
               )
     conn.commit()
     conn.close()
