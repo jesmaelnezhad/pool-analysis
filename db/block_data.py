@@ -212,6 +212,19 @@ def switch_to_main_copy(save_temporary_copy=False, remove_temporary_copy=False):
         os.remove(get_current_db_file_path())
     # set the database pointer to the main copy
     set_current_db_pointer_to_main_copy()
+    
+    
+def get_last_block_no():
+    """
+    Gets block value for the most recent block added to database
+    :return: an integer representing block value
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT block_no FROM raw_data ORDER BY block_no DESC LIMIT 1;")
+    row = results.fetchall()
+    return row[0][0]
+    
 
 
 DATA_DIRECTORY = "data"

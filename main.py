@@ -11,7 +11,7 @@ from tester.algorithmtester import AlgorithmTester, TICK_INFO_NEEDED_COLUMNS
 
 if __name__ == "__main__":
     # # Update the mine data in the database
-    # mine_data_updater.update()
+    mine_data_updater.update()
 
     duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 91)
     alg = Algorithm3Hour()
