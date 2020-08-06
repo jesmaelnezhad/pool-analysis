@@ -265,7 +265,8 @@ class AlgorithmTester:
         for i in range(len(self.AllData) - range_size):
             self.reset_runtime(i, i + range_size)
             self.prepare_to_run()
-            yield self.run()
+            run_results = self.run()
+            yield run_results
 
     def reset_runtime(self, start, end):
         """

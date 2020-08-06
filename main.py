@@ -11,26 +11,30 @@ import random
 ######################################################################
 from tester.algorithm.alg_example import Algorithm3Hour
 from tester.algorithmtester import AlgorithmTester, TICK_INFO_NEEDED_COLUMNS
+from tester.statistical_analyzers import average_on_columns, min_on_columns, max_on_columns
+from utility import logger
 
 if __name__ == "__main__":
     # # Update the mine data in the database
     # mine_data_updater.update()
     #
 
-    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 100)
+    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 50)
     alg = Algorithm3Hour()
     tester = AlgorithmTester(duration_block_no_data, alg)
     results = []
-    for result in tester.test_range(range_size=90):
+    for result in tester.test_range(range_size=48):
         results.append(result)
-    # while True:
-    #     try:
-    #         results.append(next(range_iterator))
-    #     except StopIteration:
-    #         break
-    print(results)
+    logger("main").info("Testing ranges finished.")
 
+    average = average_on_columns(results)
+    minimums = min_on_columns(results)
+    maximums = max_on_columns(results)
 
+    logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
+    logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
+    logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
+    logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
 
     # # Optimize the prediction parameters based on the mine data and tests
     # optimizer.optimize()
@@ -50,12 +54,14 @@ def test_db():
     mine_database.switch_to_main_copy()
     mine_database.print_all_raw_data()
 
+
 def insert_place_holder_data():
     mine_database.switch_to_temporary_copy()
     for i in range(1000):
         date_value = datetime.now() + timedelta(days=i)
         mine_database.insert_raw_data(int(date_value.timestamp()), date_value.strftime("%d-%m-%Y"),
-                                      date_value.strftime("%H:%M:%S"), random.randint(10, 65000), random.randint(2000000, 2050000), i, 6.5)
+                                      date_value.strftime("%H:%M:%S"), random.randint(10, 65000),
+                                      random.randint(2000000, 2050000), i, 6.5)
     mine_database.print_all_raw_data()
     mine_database.switch_to_main_copy(save_temporary_copy=True, remove_temporary_copy=True)
     mine_database.print_all_raw_data()
