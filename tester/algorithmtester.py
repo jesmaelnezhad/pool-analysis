@@ -6,7 +6,6 @@ TICK_DURATION_SECONDS = 4
 VALID_PRICE_CHANGE_GAP = 10 * 60
 LIMIT_CHANGE_DELAY = 10 * 60
 
-
 COST_PER_TERA_HASH_PER_HOUR = 0.0000084 / 24
 COST_PER_TERA_HASH_PER_TICK = COST_PER_TERA_HASH_PER_HOUR / (60 * 60 / TICK_DURATION_SECONDS)
 
@@ -99,6 +98,18 @@ class RuntimeTickInfo:
         return self.time_since_block_start_in_seconds <= time_in_seconds < self.time_since_block_start_in_seconds + TICK_DURATION_SECONDS
 
 
+class RuntimeStats:
+    def __init__(self):
+        self.profit_min = float('inf')
+        self.profit_max = float('-inf')
+
+    def update_profit_stats(self, profit):
+        if profit < self.profit_min:
+            self.profit_min = profit
+        if profit > self.profit_max:
+            self.profit_max = profit
+
+
 class Runtime:
     def __init__(self, start, end):
         """
@@ -116,6 +127,8 @@ class Runtime:
         self.total_reward = 0
 
         self.start, self.end = start, end
+
+        self.statistics = RuntimeStats()
 
     def nice_hash_api_edit_order_price(self, price):
         """
@@ -193,7 +206,7 @@ class Runtime:
 
     def runtime_cost_and_reward(self, tester, tick_info):
         """
-        Updates the total cost and reward based on what happens in the given tick
+        Updates the total cost and reward based on what happens in the given tick, also updates the statistics
         :param tester:
         :param tick_info:
         :return:
@@ -204,6 +217,8 @@ class Runtime:
             self.total_reward += current_limit * REWARD_PER_SOLVE_PER_TERA_HASH_PER_BLOCK_VALUE * tick_info.block_value
         # update cost based on the limit in this tick
         self.total_cost += current_limit * COST_PER_TERA_HASH_PER_TICK
+        if self.total_cost != 0 and self.total_reward != 0:
+            self.statistics.update_profit_stats((self.total_reward * 100) / self.total_cost)
 
     def set_tag_at(self, time_since_start, tag):
         """
@@ -280,9 +295,11 @@ class AlgorithmTester:
         self.Algorithm.post_ticks(self)
 
         # print cost and reward
-        logger_object.info("Cost: {0:.3f} - Reward: {1:0.3f} - R/C%: {2:.3f}".format(
-            self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost))
-        return self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost
+        logger_object.info("Cost: {0:.3f} - Reward: {1:0.3f} - R/C%: [ {3:.3f} >> {2:.3f} << {4:.3f} ]".format(
+            self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost,
+            self.r.statistics.profit_min, self.r.statistics.profit_max))
+        return self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost, \
+            self.r.statistics.profit_min, self.r.statistics.profit_max
 
     def prepare_to_run(self):
         """
