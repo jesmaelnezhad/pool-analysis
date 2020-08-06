@@ -99,15 +99,12 @@ class RuntimeTickInfo:
         return self.time_since_block_start_in_seconds <= time_in_seconds < self.time_since_block_start_in_seconds + TICK_DURATION_SECONDS
 
 
-class AlgorithmTester:
-    def __init__(self, data, algorithm):
+class Runtime:
+    def __init__(self, start, end):
         """
-        Initializes the algorithm tester
-        :param data: list of tuples (duration, block_id) Note: it is assumed the tuple list is ordered *recent to old*
-        and duration is in seconds
+        Initializes the object which holds the execution information of an i to j test where
+        i and j are the indices indication the range of data on which the test should be performed
         """
-        self.Data = data
-        self.Algorithm = algorithm
         self.RuntimeTicks = []
         self.current_run_tick_index = 0
         # Nice hash order properties
@@ -118,11 +115,7 @@ class AlgorithmTester:
         self.total_cost = 0
         self.total_reward = 0
 
-    def __str__(self):
-        """
-        :return: a string explaining the info of the tester object
-        """
-        return "Tester object on %d blocks with algorithm %s".format(len(self.Data), str(self.Algorithm))
+        self.start, self.end = start, end
 
     def nice_hash_api_edit_order_price(self, price):
         """
@@ -206,7 +199,7 @@ class AlgorithmTester:
         :return:
         """
         # update reward if a block is finished
-        current_limit = tester.nice_hash_api_get_order_limit()
+        current_limit = tester.r.nice_hash_api_get_order_limit()
         if tick_info.is_block_ending_point:
             self.total_reward += current_limit * REWARD_PER_SOLVE_PER_TERA_HASH_PER_BLOCK_VALUE * tick_info.block_value
         # update cost based on the limit in this tick
@@ -226,6 +219,49 @@ class AlgorithmTester:
                 return tick
         return None
 
+
+class AlgorithmTester:
+    def __init__(self, data, algorithm):
+        """
+        Initializes the algorithm tester
+        :param data: list of tuples (duration, block_id) Note: it is assumed the tuple list is ordered *recent to old*
+        and duration is in seconds
+        """
+        self.AllData = data
+        self.Algorithm = algorithm
+        # initialize runtime
+        self.r = None
+        self.Data = None
+        self.reset_runtime(0, len(data))
+
+    def __str__(self):
+        """
+        :return: a string explaining the info of the tester object
+        """
+        return "Tester object on %d blocks with algorithm %s".format(len(self.Data), str(self.Algorithm))
+
+    def test_range(self, range_size):
+        """
+        Tests all ranges of size range_size and for each such range yields a tuple like:
+        (cost, reward, R/C%, R/C% lowest, R/C% highest)
+        :param range_size: the size of slice of all data to take in each test
+        :return: a tuple as (cost, reward, R/C%, R/C% lowest, R/C% highest)
+        """
+        for i in range(len(self.AllData) - range_size):
+            self.reset_runtime(i, i + range_size)
+            self.prepare_to_run()
+            yield self.run()
+
+    def reset_runtime(self, start, end):
+        """
+
+        :param start: runtime starting index in all data
+        :param end:  runtime ending index in all data
+        :return:
+        """
+        self.r = Runtime(start, end)
+        self.Data = self.AllData[start:end]
+
     def run(self):
         """
         Executes the ticks one by one from the beginning until the end
@@ -236,17 +272,17 @@ class AlgorithmTester:
         # pre tick
         self.Algorithm.pre_ticks(self)
         # run ticks
-        for tick_index in range(len(self.RuntimeTicks)):
-            self.current_run_tick_index = tick_index
-            tick = self.RuntimeTicks[tick_index]
+        for tick_index in range(len(self.r.RuntimeTicks)):
+            self.r.current_run_tick_index = tick_index
+            tick = self.r.RuntimeTicks[tick_index]
             tick.run(self)
         # post tick
         self.Algorithm.post_ticks(self)
 
         # print cost and reward
-        logger_object.info("Cost: {0:.3f} - Reward: {1:0.3f} - R/C%: {2:.3f}".format(self.total_cost, self.total_reward,
-                                                                                     (
-                                                                                                 self.total_reward * 100) / self.total_cost))
+        logger_object.info("Cost: {0:.3f} - Reward: {1:0.3f} - R/C%: {2:.3f}".format(
+            self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost))
+        return self.r.total_cost, self.r.total_reward, (self.r.total_reward * 100) / self.r.total_cost
 
     def prepare_to_run(self):
         """
@@ -262,13 +298,13 @@ class AlgorithmTester:
             duration = block_duration
             while duration > 0:
                 new_tick = RuntimeTickInfo(block_number, block_value, block_duration - duration,
-                                           len(self.RuntimeTicks) * TICK_DURATION_SECONDS,
+                                           len(self.r.RuntimeTicks) * TICK_DURATION_SECONDS,
                                            duration == block_duration, duration <= TICK_DURATION_SECONDS)
                 # run operation
-                new_tick.add_operation(self.runtime_update_order_on_tick)
+                new_tick.add_operation(self.r.runtime_update_order_on_tick)
                 new_tick.add_operation(self.Algorithm.tick)
-                new_tick.add_operation(self.runtime_cost_and_reward)
+                new_tick.add_operation(self.r.runtime_cost_and_reward)
                 # Record the tick
-                self.RuntimeTicks.append(new_tick)
+                self.r.RuntimeTicks.append(new_tick)
                 # Move time forward
                 duration -= TICK_DURATION_SECONDS
