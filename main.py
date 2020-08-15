@@ -33,7 +33,7 @@ if __name__ == "__main__":
 def test_db():
     mine_database.print_all_raw_data()
     mine_database.switch_to_temporary_copy()
-    mine_database.insert_raw_data("a", "b", 12, 12.0, 12, 12.9, 12, 12.7, "c")
+    mine_database.insert_raw_data(1234567, "a", "b", 12, 12.9, 12, 12.7)
     mine_database.print_all_raw_data()
     mine_database.switch_to_main_copy()
     mine_database.print_all_raw_data()
