@@ -161,6 +161,15 @@ def insert_raw_data(date_found_unix, found_at_date, found_at_time, duration,
               )
     conn.commit()
     conn.close()
+    
+ 
+def insert_raw_data_dict(raw_data_dict):
+    """
+    Insert new raw data as a dictionary
+    :return: None
+    """
+    insert_raw_data(raw_data_dict["date_found_unix"], raw_data_dict["found_at_date"], raw_data_dict["found_at_time"], raw_data_dict["duration"],
+                    raw_data_dict["hash_rate"], raw_data_dict["block_no"], raw_data_dict["block_value"])
 
 
 def switch_to_temporary_copy():

@@ -13,11 +13,11 @@ if __name__ == "__main__":
     # # Update the mine data in the database
     mine_data_updater.update()
 
-    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 91)
-    alg = Algorithm3Hour()
-    tester = AlgorithmTester(duration_block_no_data, alg)
-    tester.prepare_to_run()
-    tester.run()
+    # duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 91)
+    # alg = Algorithm3Hour()
+    # tester = AlgorithmTester(duration_block_no_data, alg)
+    # tester.prepare_to_run()
+    # tester.run()
 
 
     # # Optimize the prediction parameters based on the mine data and tests
