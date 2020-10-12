@@ -131,6 +131,78 @@ def print_all_raw_data():
     print("Count: ", len(rows))
 
 
+def print_all_raw_data_in_tsdb_format2():
+    """
+    Selects and prints all records from the main table in the mine database into TSDB format
+    :return: None
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT * FROM raw_data;")
+    rows = results.fetchall()
+    for row in rows:
+        ts = row[0]
+        year_ts = row[1].split("-")[0]
+        month_ts = row[1].split("-")[1]
+        day_ts = row[1].split("-")[2]
+        hour_ts = row[2].split(":")[0]
+        minute_ts = row[2].split(":")[1]
+        second_ts = row[2].split(":")[2]
+        dur = row[3]
+        hash_rate = row[4]
+        block_no = row[5]
+        block_value = row[6]
+        print("duration {0} {7} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("hash_rate {0} {8} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("block_value {0} {10} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+    print("Count: ", len(rows))
+
+
+def print_all_raw_data_in_tsdb_format():
+    """
+    Selects and prints all records from the main table in the mine database into TSDB format
+    :return: None
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT * FROM raw_data;")
+    rows = results.fetchall()
+    for row in rows:
+        ts = row[0]
+        year_ts = row[1].split("-")[0]
+        month_ts = row[1].split("-")[1]
+        day_ts = row[1].split("-")[2]
+        hour_ts = row[2].split(":")[0]
+        minute_ts = row[2].split(":")[1]
+        second_ts = row[2].split(":")[2]
+        dur = row[3]
+        hash_rate = row[4]
+        block_no = row[5]
+        block_value = row[6]
+        print("duration{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {7} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("hash_rate{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {8} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("block_value{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {10} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+    print("Count: ", len(rows))
+
+
 def get_columns(columns, limit=100):
     """
     Selects and returns the duration and block_number of all records

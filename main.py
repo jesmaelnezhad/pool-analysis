@@ -17,9 +17,10 @@ from utility import logger
 if __name__ == "__main__":
     # # Update the mine data in the database
     # mine_data_updater.update()
-    #
-
-    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 50)
+    # #
+    # mine_database.print_all_raw_data_in_tsdb_format2()
+    # mine_database.print_all_raw_data()
+    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
     alg = Algorithm3Hour()
     tester = AlgorithmTester(duration_block_no_data, alg)
     results = []
