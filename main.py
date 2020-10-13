@@ -15,27 +15,28 @@ from tester.statistical_analyzers import average_on_columns, min_on_columns, max
 from utility import logger
 
 if __name__ == "__main__":
+    predictor.populate_db_with_random()
     # # Update the mine data in the database
     # mine_data_updater.update()
     # #
     # mine_database.print_all_raw_data_in_tsdb_format2()
     # mine_database.print_all_raw_data()
-    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
-    alg = Algorithm3Hour()
-    tester = AlgorithmTester(duration_block_no_data, alg)
-    results = []
-    for result in tester.test_range(range_size=48):
-        results.append(result)
-    logger("main").info("Testing ranges finished.")
-
-    average = average_on_columns(results)
-    minimums = min_on_columns(results)
-    maximums = max_on_columns(results)
-
-    logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
-    logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
-    logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
-    logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
+    # duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
+    # alg = Algorithm3Hour()
+    # tester = AlgorithmTester(duration_block_no_data, alg)
+    # results = []
+    # for result in tester.test_range(range_size=48):
+    #     results.append(result)
+    # logger("main").info("Testing ranges finished.")
+    #
+    # average = average_on_columns(results)
+    # minimums = min_on_columns(results)
+    # maximums = max_on_columns(results)
+    #
+    # logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
+    # logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
+    # logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
+    # logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
 
     # # Optimize the prediction parameters based on the mine data and tests
     # optimizer.optimize()
