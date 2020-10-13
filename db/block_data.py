@@ -121,15 +121,19 @@ def init_pools_data_tables():
         block_no INT NOT NULL PRIMARY KEY,
         FOREIGN KEY(pool_id) REFERENCES pools(id));
         ''')
+        c.execute('''
+        CREATE INDEX IF NOT EXISTS pool_block_occurrences_index ON pool_block_occurrences(date_found_unix);
+        ''')
         conn.commit()
     finally:
         conn.close()
 
 
-def init_pools_luck_tables(table_name):
+def init_pool_lucks_table(table_name, pool_ids):
     """
     Initializes the pools SQLite database
     :param table_name: table name
+    :param pool_ids: pool names to be used as luck column names
     :return: None
     """
     '''
@@ -138,10 +142,10 @@ def init_pools_luck_tables(table_name):
     try:
         conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
         c = conn.cursor()
+        columns_def_str = ", ".join(["luck_{} DOUBLE PRECISION".format(pool_id) for pool_id in pool_ids])
         c.execute('''
-        CREATE TABLE IF NOT EXISTS {}(window_start BIGINT PRIMARY KEY,
-        luck DOUBLE PRECISION);
-        '''.format(table_name))
+        CREATE TABLE IF NOT EXISTS {}(window_start BIGINT PRIMARY KEY, {});
+        '''.format(table_name, columns_def_str))
         conn.commit()
     finally:
         conn.close()
@@ -446,19 +450,27 @@ def insert_pool_block_occurrence(date_found_unix, pool_id, block_no):
         conn.close()
 
 
-def insert_pool_luck(table_name, data_point_timestamp, luck):
+def insert_pool_lucks(table_name, data_point_timestamp, lucks):
     """
     Insert a new block win by a pool
     :param table_name: the table name of the specific luck table
     :param data_point_timestamp: the data point at which we calculate luck
-    :param luck: luck value to record in the table
+    :param lucks: luck values to record in the table in its columns in order
     :return: None
     """
     try:
         conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
         c = conn.cursor()
-        c.execute("INSERT INTO {} VALUES (?, ?);".format(table_name),
-                  [data_point_timestamp, luck]
+        lucks_names_part = ", ".join(["{}" for l in lucks])
+        lucks_values_part = ", ".join(["?" for l in lucks])
+        luck_column_names = []
+        luck_column_values = []
+        for pid in lucks:
+            luck_column_names.append("luck_{}".format(pid))
+            luck_column_values.append(lucks[pid])
+        c.execute(("INSERT INTO {} (window_start, " + lucks_names_part + ") VALUES (?, " + lucks_values_part + ");")
+                  .format(table_name, *luck_column_names),
+                  [data_point_timestamp, *luck_column_values]
                   )
         conn.commit()
     finally:
@@ -516,7 +528,8 @@ def get_total_block_occurrences_of_pool(pool_id, start_timestamp=0, end_timestam
         conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
         c = conn.cursor()
         results = c.execute(("SELECT count(*) FROM pool_block_occurrences WHERE pool_id = {}"
-                             + " AND date_found_unix BETWEEN {} AND {};").format(pool_id, start_timestamp, end_timestamp))
+                             + " AND date_found_unix BETWEEN {} AND {};").format(pool_id, start_timestamp,
+                                                                                 end_timestamp))
         rows = results.fetchall()
         for row in rows:
             return row[0]

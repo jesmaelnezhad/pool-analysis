@@ -6,8 +6,8 @@ from prediction import TIME_CONSTANT_1months, TIME_CONSTANT_10minutes, Pool
 from utility import logger
 
 
-def generate_luck_table_name(pool, delta_window):
-    return "luck_b{}_w{}".format(pool.id, delta_window)
+def generate_luck_table_name(delta_window):
+    return "luck_w{}".format(delta_window)
 
 
 def get_now_timestamp():
@@ -31,12 +31,11 @@ class RandomPoolDataHandler:
         # make sure database is consistent with the in memory list of pools
         self.initialize_pools()
         # initialize the luck tables if not initialized yet
-        for p in self.pools:
-            for w in self.average_windows:
-                table_name = generate_luck_table_name(p, w)
-                block_data.init_pools_luck_tables(table_name)
-                if truncate_luck_tables:
-                    block_data.truncate_table(table_name, which_db="pools")
+        for w in self.average_windows:
+            table_name = generate_luck_table_name(w)
+            block_data.init_pool_lucks_table(table_name, [p.id for p in self.pools])
+            if truncate_luck_tables:
+                block_data.truncate_table(table_name, which_db="pools")
 
     def update_pools_db_with_occurrences(self):
         now_timestamp = get_now_timestamp()
@@ -59,15 +58,14 @@ class RandomPoolDataHandler:
             block_no += 1
 
     def update_luck_tables(self):
-        for p in self.pools:
-            for w in self.average_windows:
-                self.update_luck_table(p, w)
-                rows = block_data.get_columns(["*"],
-                                              table_name=generate_luck_table_name(p, w),
-                                              which_db="pools",
-                                              limit=100000)
-                for r in rows:
-                    logger("update_luck_table_{}_{}".format(p.id, w)).info(str(r))
+        for w in self.average_windows:
+            self.update_luck_table(w)
+            rows = block_data.get_columns(["*"],
+                                          table_name=generate_luck_table_name(w),
+                                          which_db="pools",
+                                          limit=100000)
+            for r in rows:
+                logger("update_luck_table_{}".format(w)).info(str(r))
 
     # ############# Private methods ############ #
     def does_pool_match(self, pool, new_random):
@@ -114,9 +112,9 @@ class RandomPoolDataHandler:
             if not pool_found:
                 self.pools.append(Pool(name, share, pool_id))
 
-    def update_luck_table(self, pool, delta_window):
+    def update_luck_table(self, delta_window):
         time_interval = delta_window * self.step_size
-        table_name = generate_luck_table_name(pool, delta_window)
+        table_name = generate_luck_table_name(delta_window)
         start_timestamp = block_data.get_latest_pool_block_occurrence_timestamp(return_oldest=True)
         if start_timestamp is None:
             return
@@ -127,11 +125,13 @@ class RandomPoolDataHandler:
         while start_timestamp < now_timestamp:
             end = start_timestamp
             begin = end - time_interval
-            delta_count = block_data.get_total_block_occurrences_of_pool(pool.id, begin, end)
             expected_total = self.get_total_expected_number_of_occurrences(time_interval)
-            expected_share = expected_total * pool.share
-            luck = delta_count / expected_share
-            block_data.insert_pool_luck(table_name, end, luck)
+            pool_lucks = {}
+            for p in self.pools:
+                delta_count = block_data.get_total_block_occurrences_of_pool(p.id, begin, end)
+                expected_share = expected_total * p.share
+                pool_lucks[p.id] = delta_count / expected_share
+            block_data.insert_pool_lucks(table_name, end, pool_lucks)
             start_timestamp += self.step_size
 
     def get_total_expected_number_of_occurrences(self, time_interval):
