@@ -1,3 +1,5 @@
 **/__pycache__
+db/__pycache__/*
 data/
 geckodriver.log
+fit_data*

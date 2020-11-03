@@ -6,8 +6,9 @@ from datetime import datetime
 
 
 ########################
-TIME_CONSTANT_10minutes = 60 * 10
-TIME_CONSTANT_1months  = 60 * 60 * 24 * 30
+TIME_10_MINUTES = 60 * 10
+TIME_1_MONTHS  = 60 * 60 * 24 * 30
+TIME_1_HOURS  = 60 * 60
 ########################
 
 

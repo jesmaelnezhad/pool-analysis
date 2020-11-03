@@ -3,6 +3,8 @@ import shutil
 import os
 from datetime import datetime
 
+import numpy
+
 from utility import logger
 
 COL_BLOCK_NO = "block_no"
@@ -129,11 +131,12 @@ def init_pools_data_tables():
         conn.close()
 
 
-def init_pool_lucks_table(table_name, pool_ids):
+def init_multi_pool_table(table_name, pool_ids, column_prefix="luck"):
     """
-    Initializes the pools SQLite database
+    Initializes the lucks tables in SQLite database
+    :param column_prefix: prefix to be used with pool ids to make column names
     :param table_name: table name
-    :param pool_ids: pool names to be used as luck column names
+    :param pool_ids: pool ids to be used as luck column names
     :return: None
     """
     '''
@@ -142,7 +145,7 @@ def init_pool_lucks_table(table_name, pool_ids):
     try:
         conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
         c = conn.cursor()
-        columns_def_str = ", ".join(["luck_{} DOUBLE PRECISION".format(pool_id) for pool_id in pool_ids])
+        columns_def_str = ", ".join(["{}_{} DOUBLE PRECISION".format(column_prefix, pool_id) for pool_id in pool_ids])
         c.execute('''
         CREATE TABLE IF NOT EXISTS {}(window_start BIGINT PRIMARY KEY, {});
         '''.format(table_name, columns_def_str))
@@ -450,9 +453,14 @@ def insert_pool_block_occurrence(date_found_unix, pool_id, block_no):
         conn.close()
 
 
-def insert_pool_lucks(table_name, data_point_timestamp, lucks):
+def insert_pool_assessments(table_name, data_point_timestamp, lucks, column_prefix="assessment"):
+    insert_pool_lucks(table_name, data_point_timestamp, lucks, column_prefix)
+
+
+def insert_pool_lucks(table_name, data_point_timestamp, lucks, column_prefix="luck"):
     """
     Insert a new block win by a pool
+    :param column_prefix: prefix to be used for columns
     :param table_name: the table name of the specific luck table
     :param data_point_timestamp: the data point at which we calculate luck
     :param lucks: luck values to record in the table in its columns in order
@@ -466,13 +474,39 @@ def insert_pool_lucks(table_name, data_point_timestamp, lucks):
         luck_column_names = []
         luck_column_values = []
         for pid in lucks:
-            luck_column_names.append("luck_{}".format(pid))
+            luck_column_names.append("{}_{}".format(column_prefix, pid))
             luck_column_values.append(lucks[pid])
         c.execute(("INSERT INTO {} (window_start, " + lucks_names_part + ") VALUES (?, " + lucks_values_part + ");")
                   .format(table_name, *luck_column_names),
                   [data_point_timestamp, *luck_column_values]
                   )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def get_all_block_occurrences(return_oldest_first=False, pool_id=None):
+    order = "ASC" if return_oldest_first else "DESC"
+    try:
+        conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
+        c = conn.cursor()
+        if pool_id is None:
+            results = c.execute("SELECT date_found_unix, pool_id FROM pool_block_occurrences "
+                                + "ORDER BY date_found_unix {}".format(order))
+            rows = results.fetchall()
+            result_rows = []
+            for row in rows:
+                result_rows.append([e for e in row])
+            return result_rows
+        else:
+            results = c.execute(("SELECT date_found_unix FROM pool_block_occurrences "
+                                 + "WHERE pool_id={} "
+                                 + "ORDER BY date_found_unix {}").format(pool_id, order))
+            rows = results.fetchall()
+            result_rows = []
+            for row in rows:
+                result_rows.append(row[0])
+            return result_rows
     finally:
         conn.close()
 
@@ -497,23 +531,71 @@ def get_latest_pool_block_occurrence_timestamp(return_oldest=False):
         conn.close()
 
 
-def get_latest_luck_window_start_timestamp(table_name):
+def get_latest_luck_window_start_timestamp(table_name, earlier_than=None):
     """
     Return the latest timestamp or None if table is empty
     :param table_name: the luck table name
+    :param earlier_than: if given, the latest point earlier than the given timestamp is returned
     :return: None
     """
     try:
         conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
         c = conn.cursor()
-        results = c.execute(("SELECT window_start FROM {} " +
-                             "ORDER BY window_start DESC LIMIT 1;").format(table_name))
+        results = None
+        if earlier_than is None:
+            results = c.execute(("SELECT window_start FROM {} " +
+                                 "ORDER BY window_start DESC LIMIT 1;").format(table_name))
+        else:
+            results = c.execute(("SELECT window_start FROM {} WHERE window_start < {} " +
+                                 "ORDER BY window_start DESC LIMIT 1;").format(table_name, earlier_than))
         rows = results.fetchall()
         for row in rows:
             return row[0]
         return None
     finally:
         conn.close()
+
+
+def get_pool_luck_values(pool_id, table_names, oldest_ts, newest_ts, column_prefix="luck",
+                         filter_by_block_occurrence=False):
+    """
+
+    :param filter_by_block_occurrence: If True, only block occurrence timestamps are returned
+    :param column_prefix: prefix to use to make column name
+    :param pool_id: the id of the pool whose luck is to be returned
+    :param table_names: list of names of all tables that contain this pool's luck
+    :param oldest_ts: lower bound of timestamp
+    :param newest_ts: upper bound of timestamp
+    :return: a list of lists like [[window_start, luck in table 1, luck in table 2, ...], ...]
+    """
+    data_points = []
+    column_name = "{}_{}".format(column_prefix, pool_id)
+    for table_name in table_names:
+        query = "SELECT window_start, {} FROM {} WHERE window_start BETWEEN {} AND {} ORDER BY window_start ASC;".format(
+            column_name, table_name, oldest_ts, newest_ts)
+        try:
+            conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
+            c = conn.cursor()
+            results = c.execute(query)
+            rows = results.fetchall()
+            # if it's the first table, first prepare timestamp of the data points
+            if len(data_points) == 0:
+                for row in rows:
+                    data_points.append([row[0]])
+            row_index = 0
+            for row in rows:
+                data_points[row_index].append(row[1])
+                row_index += 1
+        finally:
+            conn.close()
+    if filter_by_block_occurrence:
+        data_points_filtered = []
+        pool_occurrence_timestamps = get_all_block_occurrences(pool_id=pool_id)
+        for d in data_points:
+            if d[0] in pool_occurrence_timestamps:
+                data_points_filtered.append(d)
+        data_points = data_points_filtered
+    return data_points
 
 
 def get_total_block_occurrences_of_pool(pool_id, start_timestamp=0, end_timestamp=int(datetime.now().timestamp())):
@@ -534,6 +616,23 @@ def get_total_block_occurrences_of_pool(pool_id, start_timestamp=0, end_timestam
         for row in rows:
             return row[0]
         return None
+    finally:
+        conn.close()
+
+
+def get_list_of_table_names(which_db="main"):
+    """
+    Returns the list of table names in the database
+    """
+    try:
+        conn = sqlite3.connect(get_current_db_file_path(which_db="pools"))
+        c = conn.cursor()
+        results = c.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        rows = results.fetchall()
+        result = []
+        for row in rows:
+            result.append(row[0])
+        return result
     finally:
         conn.close()
 
