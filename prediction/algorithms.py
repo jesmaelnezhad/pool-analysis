@@ -10,15 +10,9 @@ from skorch import NeuralNetRegressor
 from skorch.callbacks import GradientNormClipping
 from xgboost import XGBRegressor
 
-from sktime.utils.load_data import load_from_tsfile_to_dataframe
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
-from sktime.classification.compose import ColumnEnsembleClassifier, TimeSeriesForestClassifier
-
 from prediction import TIME_10_MINUTES
 from prediction.deep_learning import TemporalConvNet
 from utility import logger
-import os
 
 
 class ForcasterPipelinePredictor:
@@ -310,6 +304,14 @@ class StepPredictor(ForcasterPipelinePredictor):
         return result
 
     def decide(self, current_x, luck_average_windows, assessment_window, horizon_predictions, assessment_windows):
+        logger("STEP-PREDICTOR").debug(
+            "current_x: {} / avg_windows: {} / assmnt_window: {} / predictions: {} / assmnt_windows: {}".format(
+                current_x,
+                luck_average_windows,
+                assessment_window,
+                horizon_predictions,
+                assessment_windows
+            ))
         if horizon_predictions is None:
             return None
         window_length = TIME_10_MINUTES * assessment_window
@@ -318,132 +320,3 @@ class StepPredictor(ForcasterPipelinePredictor):
             if 0 < p - current_x[0] <= window_length:
                 occurrences_count_in_window += 1
         return occurrences_count_in_window >= self.positive_decision_occurrence_count_threshold
-
-
-def sktime_case_string_of(observations, observation_identified_flags, label):
-    if len(observations) == 0:
-        return None
-
-    if len(observations) != len(observation_identified_flags):
-        return None
-
-    no_dimentions = len(observations[0])
-    dimension_strings = []
-    for d in range(0, no_dimentions):
-        observation_strings = []
-        for o_idx, o in enumerate(observations):
-            if observation_identified_flags[o_idx]:
-                observation_strings.append(str(o[d]))
-            else:
-                observation_strings.append('?')
-        dimension_strings.append(','.join(observation_strings))
-    x_part = ':'.join(dimension_strings)
-    return x_part + ':' + str(label)
-
-
-class SciKitPredictor(ForcasterPipelinePredictor):
-
-    def __init__(self, timestamps, data_points, correct_decision_labels,
-                 no_estimators=100,
-                 filter_object=None,
-                 case_observation_size=27 * 6):
-        super().__init__(data_points, no_estimators=no_estimators)
-        """
-        :param correct_decision_labels: parallel list with assessment windows. List of True/False data points label lists
-        """
-        if len(timestamps) != len(data_points) or len(timestamps) != len(correct_decision_labels):
-            logger("MODEL-CREATE").error(
-                "Failed to create predictor because of inconsistent length of timestamp/x/y lists")
-            return
-        self.timestamps = timestamps
-        self.correct_decision_labels = correct_decision_labels
-        self.filter = filter_object
-        self.data_points_filter_results = []
-        self.case_observation_size = case_observation_size
-        # The following list will contain one classifier per assessment window
-        self.classifiers = []
-        self.horizon = 9 * 6
-
-    def init(self):
-        if self.filter is not None:
-            self.data_points_filter_results = [self.filter.filter(ts) for ts in self.timestamps]
-        else:
-            self.data_points_filter_results = [True for data_point in self.data_points]
-
-    def prepare_ts_file(self, file_full_path, start_index, end_index, case_observation_size, labeling_index):
-        try:
-            fit_data_file = open(file_full_path, 'w')
-            fit_data_file.write(
-                "@problemName fit_data\n@timeStamps false\n@univariate false\n@classLabel true True False\n@data\n")
-            no_cases = 0
-            case_last_data_point_index = end_index
-            while case_last_data_point_index > start_index + case_observation_size:
-                case_data_points = self.data_points[
-                                   case_last_data_point_index - case_observation_size:case_last_data_point_index]
-                case_filter_flags = self.data_points_filter_results[
-                                    case_last_data_point_index - case_observation_size:case_last_data_point_index]
-                case_label = self.correct_decision_labels[case_last_data_point_index - 1][labeling_index]
-                case_str = sktime_case_string_of(case_data_points, case_filter_flags, case_label)
-                fit_data_file.write(case_str + "\n")
-                no_cases += 1
-                case_last_data_point_index -= 1
-        finally:
-            fit_data_file.close()
-        logger("MODEL-DATA-PREP").info("No cases written: " + str(no_cases) + " -> " + file_full_path)
-
-    def fit(self, luck_average_windows, assessment_windows, until=None, max_horizon=9 * 6):
-        if until is not None and (until < 0 or until >= len(self.data_points)):
-            logger("MODEL-FIT").error("Parameter until is too large for the given data points: {}".format(until))
-            return
-        self.horizon = max_horizon
-        for wi, w in enumerate(assessment_windows):
-            if w > self.horizon:
-                break
-            # prepare data frame for sktime package
-            temporary_data_fit_file = os.getcwd() + "/fit_data_w" + str(w)
-            self.prepare_ts_file(temporary_data_fit_file, 0, len(self.data_points) if until is None else until,
-                                 self.case_observation_size, wi)
-
-            # parse data frames from the temporary fit data file
-            X, y = load_from_tsfile_to_dataframe(temporary_data_fit_file)
-            estimators = []
-            for i in range(0, len(luck_average_windows)):
-                estimators.append(("TSF{}".format(i), TimeSeriesForestClassifier(n_estimators=self.no_estimators), [i]))
-            c = ColumnEnsembleClassifier(estimators=estimators)
-            c.fit(X, y)
-            self.classifiers.append(c)
-
-    def predict(self, luck_average_windows, assessment_windows, from_idx=None):
-        logger("MODEL-FIT").debug(
-            "num_lags: {} / pred_stride: {} / fit_intercept: {} / horizon: {}".format(self.num_lags,
-                                                                                      self.pred_stride,
-                                                                                      self.fit_intercept,
-                                                                                      self.horizon))
-        if from_idx is not None and (from_idx < 0 or from_idx >= len(self.data_points)):
-            logger("MODEL-PREDICT").error("Parameter until is too large for the given data points: {}".format(from_idx))
-            return
-        from_idx = len(self.data_points) - 1 if from_idx is None else from_idx
-        y_predictions = [[] for i in range(from_idx, len(self.data_points))]
-        for wi, w in enumerate(assessment_windows):
-            if w > self.horizon:
-                break
-            # prepare data frame for sktime package
-            temporary_data_fit_file = os.getcwd() + "/fit_data"
-            self.prepare_ts_file(temporary_data_fit_file, from_idx - self.case_observation_size, len(self.data_points),
-                                 self.case_observation_size, wi)
-            X, y = load_from_tsfile_to_dataframe(temporary_data_fit_file)
-            y_prediction = self.classifiers[wi].predict(X)
-            for pred_point_index, y_point_prediction in enumerate(y_prediction):
-                y_predictions[pred_point_index].append(y_point_prediction)
-
-        return y_predictions
-
-    def decide(self, current_x, luck_average_windows, assessment_window, horizon_predictions, assessment_windows):
-        if horizon_predictions is None:
-            return None
-        for wi, w in enumerate(assessment_windows):
-            if w > self.horizon:
-                break
-            if w == assessment_window:
-                return horizon_predictions[wi]
-        return None

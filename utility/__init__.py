@@ -7,5 +7,5 @@ logging.basicConfig(level=logging.DEBUG, format=FORMAT)
 
 def logger(name):
     logger_ = logging.getLogger(name)
-    logger_.setLevel(logging.DEBUG)
+    logger_.setLevel(logging.INFO)
     return logger_

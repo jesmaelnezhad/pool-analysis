@@ -102,7 +102,7 @@ class RandomPoolDataHandler:
         self.assessment_windows = assessment_windows
         #
         self.prediction_horizon_seconds_max = 48 * 6 * TIME_10_MINUTES
-        self.prediction_history_length_seconds = 30 * 24 * 6 * TIME_10_MINUTES
+        self.prediction_history_length_seconds = 42 * 24 * 6 * TIME_10_MINUTES
         self.newest_ts = 0
         self.oldest_ts = 0
         self.x_data_extractor = None
@@ -228,8 +228,7 @@ class RandomPoolDataHandler:
         self.oldest_ts = block_data.get_latest_luck_window_start_timestamp(table_name,
                                                                            earlier_than=(
                                                                                    self.newest_ts -
-                                                                                   self.prediction_history_length_seconds -
-                                                                                   no_days_offset * 24 * 6 * TIME_10_MINUTES))
+                                                                                   self.prediction_history_length_seconds))
 
         self.x_data_extractor = block_data.get_pool_luck_values
         self.block_occurrence_extractor = block_data.get_all_block_occurrences
@@ -310,21 +309,23 @@ class RandomPoolDataHandler:
     def get_total_expected_number_of_occurrences(self, time_interval):
         return (time_interval * 1.0) / self.step_size
 
-    def export_prediction_x(self, pool_id, filter_by_block_occurrence=False):
+    def export_prediction_x(self, pool_id, filter_by_block_occurrence=False, round_to_n_decimal_points=5):
         """
         :return: List of data points to be used in training
         """
         table_names = [generate_luck_table_name(dw) for dw in self.average_windows]
         return self.x_data_extractor(pool_id, table_names, self.oldest_ts, self.newest_ts,
-                                     filter_by_block_occurrence=filter_by_block_occurrence)
+                                     filter_by_block_occurrence=filter_by_block_occurrence,
+                                     round_to_n_decimal_points=round_to_n_decimal_points)
 
     def export_block_occurrence_timestamps(self, pool_id):
         return self.block_occurrence_extractor(pool_id=pool_id)
 
-    def export_assessments_y(self, pool_id, filter_by_block_occurrence=False):
+    def export_assessments_y(self, pool_id, filter_by_block_occurrence=False, round_to_n_decimal_points=5):
         """
         :return: List of data points to be used in training
         """
         table_names = [generate_assessment_table_name(dw) for dw in self.assessment_windows]
         return self.x_data_extractor(pool_id, table_names, self.oldest_ts, self.newest_ts, column_prefix="assessment",
-                                     filter_by_block_occurrence=filter_by_block_occurrence)
+                                     filter_by_block_occurrence=filter_by_block_occurrence,
+                                     round_to_n_decimal_points=round_to_n_decimal_points)

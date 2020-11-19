@@ -557,9 +557,10 @@ def get_latest_luck_window_start_timestamp(table_name, earlier_than=None):
 
 
 def get_pool_luck_values(pool_id, table_names, oldest_ts, newest_ts, column_prefix="luck",
-                         filter_by_block_occurrence=False):
+                         filter_by_block_occurrence=False, round_to_n_decimal_points=6):
     """
 
+    :param round_to_n_decimal_points: All numbers are rounded up to this number of decimal points before being returned
     :param filter_by_block_occurrence: If True, only block occurrence timestamps are returned
     :param column_prefix: prefix to use to make column name
     :param pool_id: the id of the pool whose luck is to be returned
@@ -584,7 +585,9 @@ def get_pool_luck_values(pool_id, table_names, oldest_ts, newest_ts, column_pref
                     data_points.append([row[0]])
             row_index = 0
             for row in rows:
-                data_points[row_index].append(row[1])
+                # round the returning values
+                rounded_value = round(row[1], ndigits=round_to_n_decimal_points)
+                data_points[row_index].append(rounded_value)
                 row_index += 1
         finally:
             conn.close()

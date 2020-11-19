@@ -13,8 +13,9 @@ from datetime import timedelta
 import random
 
 ######################################################################
+from prediction.SciKitPredictor import SciKitPredictor
 from prediction.algorithm_tester import AlgorithmTester
-from prediction.algorithms import StrengthPredictor, Aggregator, StepPredictor, SciKitPredictor
+from prediction.algorithms import StrengthPredictor, Aggregator, StepPredictor
 from tester.statistical_analyzers import average_on_columns, min_on_columns, max_on_columns
 from utility import logger
 
@@ -26,9 +27,25 @@ def prepare_average_luck_windows():
     # luck_average_windows += [n * 3 * TICKS_HOUR for n in range(2, 8)]  # every 3 hours from hour 6 to 24
     # luck_average_windows += [n * 6 * TICKS_HOUR for n in range(4, 8)]  # every 6 hours from hour 24 to 48
     # luck_average_windows += [n * 24 * TICKS_HOUR for n in range(2, 7)]  # every day for 5 days from day 2
-    luck_average_windows = [n * TICKS_HOUR for n in [6, 9, 12, 24, 7*24, 14*24]]  # for the first ensembel results
+    luck_average_windows = [n * TICKS_HOUR for n in [12, 7 * 24]]  # for the first ensemble results
     # luck_average_windows += [n * 24 * 7 * TICKS_HOUR for n in range(1, 3)]  # every 7 days for two weeks
     return luck_average_windows
+
+
+def get_every_nth_value_for_average_window(window):
+    return 1
+    # if window == 24 * TICKS_HOUR:
+    #     return 6
+    # if window == 14 * 24 * TICKS_HOUR:
+    #     return 72
+    # if window in [n * TICKS_HOUR for n in [24, 14 * 24]]:
+    #     return 6
+    # if 0 < window < 24 * TICKS_HOUR:
+    #     return 1
+    # elif 24 * TICKS_HOUR <= window < 7 * 24 * TICKS_HOUR:
+    #     return 2
+    # else:
+    #     return 3
 
 
 def get_average_luck_window_index(window, windows):
@@ -40,7 +57,7 @@ def get_average_luck_window_index(window, windows):
 
 def prepare_average_assessment_windows():
     # assessment_windows = [n * TICKS_HOUR for n in range(1, 6)]  # every hour for 5 hours
-    assessment_windows = [n * 3 * TICKS_HOUR for n in range(1, 4)]  # every 3 hours from hour 3 to 12
+    assessment_windows = [n * 3 * TICKS_HOUR for n in range(3, 4)]  # every 3 hours from hour 3 to 12
     # assessment_windows = [n * 1 * TICKS_HOUR for n in range(1, 73)]  # every hour until 3 days
     # assessment_windows += [n * 2 * TICKS_HOUR for n in range(6, 13)]  # every 2 hours until 24 hours
     return assessment_windows
@@ -88,9 +105,18 @@ def case(data_handler, luck_average_windows, assessment_average_windows, pool_na
          decision_aggregation_method="and",
          predictor_class="aggregation",
          data_filter=None,
-         case_observation_size=24 * 6):
+         case_observation_size=24 * 6,
+         prediction_above_one_margin=0.5,
+         round_to_n_decimal_points=5,
+         class_weight=None,
+         max_depth=5,
+         criterion='entropy',
+         min_samples_split=2,
+         min_samples_leaf=1,
+         bootstrap=False,
+         oob_score=False):
     """
-    :param predictor_class: aggregation or step
+    :param predictor_class: aggregation or step or scikit
     :return:
     """
     logger("==========================================").info("")
@@ -109,8 +135,9 @@ def case(data_handler, luck_average_windows, assessment_average_windows, pool_na
     sum_results = None
     no_exp_repeats = 10
     for day_offset in range(no_exp_repeats, 0, -1):
-        data_handler.set_main_configs_for_input_data_preparation(no_days_offset=(day_offset - 1) * 2)
-        x, y = predictor.export_pool_data_points_for_training(data_handler, pool_name)
+        data_handler.set_main_configs_for_input_data_preparation(no_days_offset=(day_offset - 1) * 3)
+        x, y = predictor.export_pool_data_points_for_training(data_handler, pool_name,
+                                                              round_to_n_decimal_points=round_to_n_decimal_points)
         data_points_filter = None
         if predictor_class == "step" or predictor_class == "scikit":
             data_points_filter = data_filter
@@ -145,12 +172,23 @@ def case(data_handler, luck_average_windows, assessment_average_windows, pool_na
                 # prepare classification labeling based on assessments
                 decision_labels = []
                 for data_point_assessments in y:
-                    decision_labels.append([(assessment >= 1) for assessment in data_point_assessments[1:]])
+                    decision_labels.append(
+                        [(assessment >= 1 + prediction_above_one_margin) for assessment in data_point_assessments[1:]])
                 algorithm_tester.add_algorithm([
                     SciKitPredictor(x_only_timestamp, x_without_timestamp, decision_labels,
                                     no_estimators=no_estimators,
                                     filter_object=data_points_filter,
-                                    case_observation_size=case_observation_size)])
+                                    case_observation_size=case_observation_size,
+                                    every_m_observations_for_dimension=[
+                                        get_every_nth_value_for_average_window(avg_window) for avg_window in
+                                        luck_average_windows],
+                                    class_weight=class_weight,
+                                    max_depth=max_depth,
+                                    criterion=criterion,
+                                    min_samples_split=min_samples_split,
+                                    min_samples_leaf=min_samples_leaf,
+                                    bootstrap=bootstrap,
+                                    oob_score=oob_score)])
 
         else:
             for test_case in cases:
@@ -172,7 +210,7 @@ def case(data_handler, luck_average_windows, assessment_average_windows, pool_na
                                       positive_decision_occurrence_count_threshold=test_case[7])])
         max_horizon = 1000000
         results = algorithm_tester.test_algorithms(decision_aggregation_method=decision_aggregation_method,
-                                                   max_horizon=max_horizon, test_size=150)
+                                                   max_horizon=max_horizon, test_size=100)
         if sum_results is None:
             sum_results = results
         else:
@@ -191,25 +229,186 @@ def case(data_handler, luck_average_windows, assessment_average_windows, pool_na
                             last_window_sum[last_window_sum_idx] + current_result[last_window_sum_idx],)
                 new_results.append(new_sum)
             sum_results = new_results
+        logger("RESULTS-AVG").debug(
+            "Day offset: \t Horizon  : S/T\tP/T\tRP/T\tPS/P\tPS/T\tT")
+        for i, w in enumerate(assessment_average_windows):
+            if w > max_horizon:
+                continue
+            logger("RESULTS-AVG").debug(
+                "Day offset: {} \t Horizon {} : {:.2f}\t{:.2f}\t{}\t{:.2f}\t{:.2f}\t{}".format(
+                    day_offset,
+                    w, sum_results[i][0] / no_exp_repeats,
+                       sum_results[i][1] / no_exp_repeats,
+                       sum_results[i][2] / no_exp_repeats,
+                       sum_results[i][3] / no_exp_repeats,
+                       sum_results[i][4] / no_exp_repeats,
+                       sum_results[i][5] / no_exp_repeats))
+    logger("RESULTS-AVG").info(
+        "Day offset: \t Horizon  : S/T\tP/T\tRP/T\tPS/P\tPS/T\tT")
     for i, w in enumerate(assessment_average_windows):
         if w > max_horizon:
             continue
         logger("RESULTS-AVG").info(
-            "Horizon {} : {:.2f}\t{:.2f}\t{:.2f}\t{:.2f}\t{:.2f}".format(w, sum_results[i][0] / no_exp_repeats,
+            "Horizon {} : {:.2f}\t{:.2f}\t{}\t{:.2f}\t{:.2f}\t{}".format(w, sum_results[i][0] / no_exp_repeats,
                                                                          sum_results[i][1] / no_exp_repeats,
                                                                          sum_results[i][2] / no_exp_repeats,
                                                                          sum_results[i][3] / no_exp_repeats,
-                                                                         sum_results[i][4] / no_exp_repeats))
+                                                                         sum_results[i][4] / no_exp_repeats,
+                                                                         sum_results[i][5] / no_exp_repeats))
 
 
 def case_algorithm(algorithm, data_handler, luck_average_windows, assessment_average_windows, pool_name,
                    step_predictor=False):
     ## Scikit
+
+    default_parameters = {
+        "no_estimators": 150,
+        "case_observation_size": 24 * TICKS_HOUR,
+        "prediction_above_one_margin": 0,
+        "round_to_n_decimal_points": 7,
+        "class_weight": None,
+        "max_depth": 3,
+        "criterion": 'entropy',
+        "min_samples_split": 10,
+        "min_samples_leaf": 1,
+        "bootstrap": True,
+        "oob_score": True,
+    }
+
+    logger("CASES").info("========================================================== base")
     case(data_handler, luck_average_windows=luck_average_windows,
          assessment_average_windows=assessment_average_windows,
-         pool_name=pool_name, no_estimators=100,
+         pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
          predictor_class="scikit",
-         case_observation_size=6 * TICKS_HOUR)
+         case_observation_size=default_parameters["case_observation_size"],
+         prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+         round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+         class_weight=default_parameters["class_weight"],
+         max_depth=default_parameters["max_depth"],
+         criterion=default_parameters["criterion"],
+         min_samples_split=default_parameters["min_samples_split"],
+         min_samples_leaf=default_parameters["min_samples_leaf"],
+         bootstrap=default_parameters["bootstrap"],
+         oob_score=default_parameters["oob_score"])
+
+    # logger("CASES").info("========================================================== class_weight None")
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=None,
+    #      max_depth=default_parameters["max_depth"],
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=default_parameters["min_samples_split"],
+    #      min_samples_leaf=default_parameters["min_samples_leaf"],
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+
+    # logger("CASES").info("========================================================== 6 decimal points")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=6,
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=default_parameters["max_depth"],
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=default_parameters["min_samples_split"],
+    #      min_samples_leaf=default_parameters["min_samples_leaf"],
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+
+    # logger("CASES").info("========================================================== max_depth less")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=default_parameters["max_depth"] / 2,
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=default_parameters["min_samples_split"],
+    #      min_samples_leaf=default_parameters["min_samples_leaf"],
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+    #
+    # logger("CASES").info("========================================================== min_samples_split less")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=default_parameters["max_depth"],
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=int(default_parameters["min_samples_split"] / 2),
+    #      min_samples_leaf=default_parameters["min_samples_leaf"],
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+    #
+    # logger("CASES").info("========================================================== min split * 10")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=default_parameters["max_depth"],
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=20,
+    #      min_samples_leaf=default_parameters["min_samples_leaf"],
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+    #
+    # logger("CASES").info("========================================================== min leaf * 10")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=default_parameters["max_depth"],
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=default_parameters["min_samples_split"],
+    #      min_samples_leaf=10,
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+    #
+    # logger("CASES").info("========================================================== min leaf min split max_depth * 5")
+    #
+    # case(data_handler, luck_average_windows=luck_average_windows,
+    #      assessment_average_windows=assessment_average_windows,
+    #      pool_name=pool_name, no_estimators=default_parameters["no_estimators"],
+    #      predictor_class="scikit",
+    #      case_observation_size=default_parameters["case_observation_size"],
+    #      prediction_above_one_margin=default_parameters["prediction_above_one_margin"],
+    #      round_to_n_decimal_points=default_parameters["round_to_n_decimal_points"],
+    #      class_weight=default_parameters["class_weight"],
+    #      max_depth=25,
+    #      criterion=default_parameters["criterion"],
+    #      min_samples_split=10,
+    #      min_samples_leaf=5,
+    #      bootstrap=default_parameters["bootstrap"],
+    #      oob_score=default_parameters["oob_score"])
+
     # # Booster
     # ## Strength
     # case(data_handler, luck_average_windows=luck_average_windows, assessment_average_windows=assessment_average_windows,
@@ -302,7 +501,7 @@ if __name__ == "__main__":
     print(str(table_names))
     data_handler = predictor.create_data_handler(pools, luck_average_windows, assessment_average_windows)
     pool_names = ["SLUSHPOOL", "BTCCOM", "VIABTC"]
-    for pool_name in pool_names[:]:
+    for pool_name in pool_names[:1]:
         logger("RESULTS").info("Pool: {}".format(pool_name))
         # Combination example
         # Booster

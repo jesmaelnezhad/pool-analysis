@@ -42,10 +42,14 @@ def create_data_handler(pools, luck_average_windows, assessment_average_windows)
     return data_handler
 
 
-def export_pool_data_points_for_training(data_handler, pool_name, filter_by_block_occurrence=False):
+def export_pool_data_points_for_training(data_handler, pool_name,
+                                         filter_by_block_occurrence=False,
+                                         round_to_n_decimal_points=5):
     p = data_handler.get_pool_by_name(pool_name)
-    x = data_handler.export_prediction_x(p.id, filter_by_block_occurrence=filter_by_block_occurrence)
-    y = data_handler.export_assessments_y(p.id, filter_by_block_occurrence=filter_by_block_occurrence)
+    x = data_handler.export_prediction_x(p.id, filter_by_block_occurrence=filter_by_block_occurrence,
+                                         round_to_n_decimal_points=round_to_n_decimal_points)
+    y = data_handler.export_assessments_y(p.id, filter_by_block_occurrence=filter_by_block_occurrence,
+                                          round_to_n_decimal_points=round_to_n_decimal_points)
     # print(str(x))
     return x, y
 
