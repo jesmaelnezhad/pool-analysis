@@ -8,9 +8,9 @@ from db import block_data as mine_database, block_data
 from data_fetcher import update as mine_data_updater
 from prediction import predictor, optimizer, TIME_1_HOURS, TIME_10_MINUTES, Pool
 from plotter import plots
-from datetime import datetime
 from datetime import timedelta
 import random
+from datetime import datetime
 
 ######################################################################
 from prediction.SciKitPredictor import SciKitPredictor
@@ -492,6 +492,47 @@ def case_algorithm(algorithm, data_handler, luck_average_windows, assessment_ave
     #      decision_aggregation_method="any1")
 
 
+def group_count_x_days(resultsList, x):
+    results = []
+    group_start = None
+    group_days = set()
+    group_size = 0
+    for row in resultsList:
+        day_date = row[0]
+        count = row[1]
+        if group_start is None:
+            group_start = day_date
+        if (not day_date in group_days) and (len(group_days) == x):
+            results.append([group_start, str(group_size)])
+            group_start = day_date
+            group_size = count
+            group_days.clear()
+            group_days.add(day_date)
+        else:
+            group_days.add(day_date)
+            group_size += count
+    results.append([group_start, str(group_size)])
+    return results
+
+
+def get_list_key(l):
+    return datetime.strptime(l[0], '%m-%d-%Y').timestamp()
+
+
+def print_csv_data_tables(aggregation_data_window=1):
+
+    resultsList = block_data.get_all_day_counts()
+    resultsList.sort(key=get_list_key)
+    # # print day count
+    # for row in resultsList:
+    #     print("\t".join([str(r) for r in row]))
+    per_two_days = group_count_x_days(resultsList, aggregation_data_window)
+    per_two_days.sort(key=get_list_key)
+    # print(per_two_days)
+    for row in per_two_days:
+        print("\t".join([str(r) for r in row]))
+
+
 if __name__ == "__main__":
     luck_average_windows = prepare_average_luck_windows()
     assessment_average_windows = prepare_average_assessment_windows()
@@ -615,7 +656,6 @@ if __name__ == "__main__":
     # predictor.extend_mine_data_by_prediction(100)
     # # Generate plots
     # plots.generate_plots()
-
 
 def test_db():
     mine_database.print_all_raw_data()

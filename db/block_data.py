@@ -217,6 +217,25 @@ def print_all_raw_data():
         conn.close()
 
 
+def get_all_day_counts():
+    """
+    Selects and prints all records from the main table in the mine database
+    :return: None
+    """
+    try:
+        conn = sqlite3.connect(get_current_db_file_path())
+        c = conn.cursor()
+        results = c.execute("SELECT found_at_date, COUNT(found_at_date) FROM raw_data GROUP BY found_at_date;")
+        resultsList = []
+        rows = results.fetchall()
+        for row in rows:
+            resultsList.append([r for r in row])
+        return resultsList
+    finally:
+        conn.close()
+    return None
+
+
 def print_all_pools_data():
     """
     Selects and prints all records from the main table in the mine database
