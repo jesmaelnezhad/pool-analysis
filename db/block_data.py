@@ -86,15 +86,13 @@ def init_block_data_db():
     c = conn.cursor()
     # Create main data table
     c.execute('''
-    CREATE TABLE IF NOT EXISTS raw_data(found_at_date TEXT, 
-    found_at_time TEXT, 
-    duration INT, 
-    hash_rate REAL, 
-    difficulty BIGINT, 
-    luck REAL, 
-    block_no INT, 
-    block_value DOUBLE PRECISION, 
-    confirm_left TEXT);
+    CREATE TABLE IF NOT EXISTS raw_data(date_found_unix BIGINT,
+    found_at_date TEXT,
+    found_at_time TEXT,
+    duration INT,
+    hash_rate INT,
+    block_no INT NOT NULL PRIMARY KEY,
+    block_value DOUBLE PRECISION);
     ''')
     # Create views
     c.execute('''
@@ -111,9 +109,7 @@ def init_block_data_db():
     found_at_date, 
     COUNT(found_at_date) AS block_count, 
     AVG(duration) AS duration, 
-    AVG(hash_rate) AS hash_rate, 
-    AVG(difficulty) AS difficulty, 
-    AVG(luck) AS luck, 
+    AVG(hash_rate) AS hash_rate,
     AVG(block_value) AS block_value 
     FROM raw_data GROUP BY found_at_date ORDER BY found_at_date;
     ''')
@@ -135,6 +131,78 @@ def print_all_raw_data():
     print("Count: ", len(rows))
 
 
+def print_all_raw_data_in_tsdb_format2():
+    """
+    Selects and prints all records from the main table in the mine database into TSDB format
+    :return: None
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT * FROM raw_data;")
+    rows = results.fetchall()
+    for row in rows:
+        ts = row[0]
+        year_ts = row[1].split("-")[0]
+        month_ts = row[1].split("-")[1]
+        day_ts = row[1].split("-")[2]
+        hour_ts = row[2].split(":")[0]
+        minute_ts = row[2].split(":")[1]
+        second_ts = row[2].split(":")[2]
+        dur = row[3]
+        hash_rate = row[4]
+        block_no = row[5]
+        block_value = row[6]
+        print("duration {0} {7} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("hash_rate {0} {8} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("block_value {0} {10} year_ts={1} month_ts={2} day_ts={3} hour_ts={4} minute_ts={5} second_ts={6} block_no={9}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+    print("Count: ", len(rows))
+
+
+def print_all_raw_data_in_tsdb_format():
+    """
+    Selects and prints all records from the main table in the mine database into TSDB format
+    :return: None
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT * FROM raw_data;")
+    rows = results.fetchall()
+    for row in rows:
+        ts = row[0]
+        year_ts = row[1].split("-")[0]
+        month_ts = row[1].split("-")[1]
+        day_ts = row[1].split("-")[2]
+        hour_ts = row[2].split(":")[0]
+        minute_ts = row[2].split(":")[1]
+        second_ts = row[2].split(":")[2]
+        dur = row[3]
+        hash_rate = row[4]
+        block_no = row[5]
+        block_value = row[6]
+        print("duration{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {7} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("hash_rate{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {8} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+        print("block_value{{year_ts=\"{1}\",month_ts=\"{2}\",day_ts=\"{3}\",hour_ts=\"{4}\",minute_ts=\"{5}\",second_ts=\"{6}\",block_no=\"{9}\"}} {10} {0}".format(ts,
+                            year_ts, month_ts, day_ts,
+                            hour_ts, minute_ts, second_ts,
+                            dur, hash_rate, block_no, block_value))
+    print("Count: ", len(rows))
+
+
 def get_columns(columns, limit=100):
     """
     Selects and returns the duration and block_number of all records
@@ -152,17 +220,16 @@ def get_columns(columns, limit=100):
     return data_rows
 
 
-def insert_raw_data(found_at_date, found_at_time, duration,
-                    hash_rate, difficulty, luck,
-                    block_no, block_value, confirm_left):
+def insert_raw_data(date_found_unix, found_at_date, found_at_time, duration,
+                    hash_rate, block_no, block_value):
     """
     Insert a new raw record
     :return: None
     """
     conn = sqlite3.connect(get_current_db_file_path())
     c = conn.cursor()
-    c.execute("INSERT INTO raw_data VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
-              [found_at_date, found_at_time, duration, hash_rate, difficulty, luck, block_no, block_value, confirm_left]
+    c.execute("INSERT INTO raw_data VALUES (?, ?, ?, ?, ?, ?, ?);",
+              [date_found_unix, found_at_date, found_at_time, duration, hash_rate, block_no, block_value]
               )
     conn.commit()
     conn.close()
@@ -212,6 +279,19 @@ def switch_to_main_copy(save_temporary_copy=False, remove_temporary_copy=False):
         os.remove(get_current_db_file_path())
     # set the database pointer to the main copy
     set_current_db_pointer_to_main_copy()
+    
+    
+def get_last_block_no():
+    """
+    Gets block value for the most recent block added to database
+    :return: an integer representing block value
+    """
+    conn = sqlite3.connect(get_current_db_file_path())
+    c = conn.cursor()
+    results = c.execute("SELECT block_no FROM raw_data ORDER BY block_no DESC LIMIT 1;")
+    row = results.fetchall()
+    return row[0][0]
+    
 
 
 DATA_DIRECTORY = "data"

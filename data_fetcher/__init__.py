@@ -1,15 +1,16 @@
 from utility import logger
-
-logger("data_fetcher").info("Setting up the data fetcher")
-
-LAST_BLOCK_NO_SEEN = None
-# TODO Find the most recent block no seen
-
-
-def update_last_block_no_seen():
-    # TODO read the block no of the most recent block found in the database
-    pass
+from db import block_data
 
 
 def get_last_block_no_seen():
+    LAST_BLOCK_NO_SEEN = block_data.get_last_block_no()
+    # print("Return No Seen as ", LAST_BLOCK_NO_SEEN)
     return LAST_BLOCK_NO_SEEN
+
+
+def get_slush_account_token():
+    token = "ytvXZLN3nCHwYWlz"
+    return token
+
+
+logger("data_fetcher").info("Setting up the data fetcher")
