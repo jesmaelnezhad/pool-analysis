@@ -16,10 +16,10 @@ class Algorithm3Hour:
         # self.logger.info("     price : {0:.3f}".format(tester.nice_hash_api_get_order_price()))
         # Raise to 500 on block start
         if tick_info.is_block_starting_point:
-            tester.nice_hash_api_edit_order_limit(500)
+            tester.r.nice_hash_api_edit_order_limit(500)
         # Lower to 50 if 3hours has passed since block start
         if tick_info.has_passed_exactly(3):
-            tester.nice_hash_api_edit_order_limit(50)
+            tester.r.nice_hash_api_edit_order_limit(50)
 
         # Example one:
         # If block started, wake up three hours later and print hello
