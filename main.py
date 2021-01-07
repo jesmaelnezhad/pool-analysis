@@ -8,9 +8,9 @@ from db import block_data as mine_database, block_data
 from data_fetcher import update as mine_data_updater
 from prediction import predictor, optimizer, TIME_1_HOURS, TIME_10_MINUTES, Pool
 from plotter import plots
-from datetime import datetime
 from datetime import timedelta
 import random
+from datetime import datetime
 
 ######################################################################
 from prediction.SciKitPredictor import SciKitPredictor
@@ -492,129 +492,46 @@ def case_algorithm(algorithm, data_handler, luck_average_windows, assessment_ave
     #      decision_aggregation_method="any1")
 
 
+def group_count_x_days(resultsList, x):
+    results = []
+    group_start = None
+    group_days = set()
+    group_size = 0
+    for row in resultsList:
+        day_date = row[0]
+        count = row[1]
+        if group_start is None:
+            group_start = day_date
+        if (not day_date in group_days) and (len(group_days) == x):
+            results.append([group_start, str(group_size)])
+            group_start = day_date
+            group_size = count
+            group_days.clear()
+            group_days.add(day_date)
+        else:
+            group_days.add(day_date)
+            group_size += count
+    results.append([group_start, str(group_size)])
+    return results
+
+
+def get_list_key(l):
+    return datetime.strptime(l[0], '%m-%d-%Y').timestamp()
+
+
 if __name__ == "__main__":
-    luck_average_windows = prepare_average_luck_windows()
-    assessment_average_windows = prepare_average_assessment_windows()
-    pools = prepare_pools()
-    # predictor.populate_db_with_random(pools, luck_average_windows, assessment_average_windows)
-    table_names = block_data.get_list_of_table_names(which_db="pools")
-    print(str(table_names))
-    data_handler = predictor.create_data_handler(pools, luck_average_windows, assessment_average_windows)
-    pool_names = ["SLUSHPOOL", "BTCCOM", "VIABTC"]
-    for pool_name in pool_names[:1]:
-        logger("RESULTS").info("Pool: {}".format(pool_name))
-        # Combination example
-        # Booster
-        # case_algorithm("booster", data_handler, luck_average_windows, assessment_average_windows, pool_name,
-        #                step_predictor=True)
-        # Linear
-        case_algorithm("linear", data_handler, luck_average_windows, assessment_average_windows, pool_name,
-                       step_predictor=True)
-        # Linear
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="linear", aggregator=Aggregator(method="strength"),
-        #                       num_lags=10, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="linear", aggregator=Aggregator(method="time_accuracy"),
-        #                       num_lags=15, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="linear", aggregator=Aggregator(method="select", avg_window_idx=6),
-        #                       num_lags=10, pred_stride=0.25, fit_intercept=False,
-        #                       success_hardness_factor=1)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="linear", aggregator=Aggregator(method="select", avg_window_idx=7),
-        #                       num_lags=15, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1)])
 
-        # # Booster
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="booster", aggregator=Aggregator(method="strength"),
-        #                       num_lags=5, pred_stride=0.5, fit_intercept=False,
-        #                       success_hardness_factor=1,
-        #                       no_estimators=50)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="booster", aggregator=Aggregator(method="time_accuracy"),
-        #                       num_lags=5, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1,
-        #                       no_estimators=50)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="booster", aggregator=Aggregator(method="select", avg_window_idx=7),
-        #                       num_lags=5, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1,
-        #                       no_estimators=50)])
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="booster", aggregator=Aggregator(method="select", avg_window_idx=6),
-        #                       num_lags=5, pred_stride=1, fit_intercept=False,
-        #                       success_hardness_factor=1,
-        #                       no_estimators=50)])
+    resultsList = block_data.get_all_day_counts()
+    resultsList.sort(key=get_list_key)
+    # # print day count
+    # for row in resultsList:
+    #     print("\t".join([str(r) for r in row]))
+    per_two_days = group_count_x_days(resultsList, 14)
+    per_two_days.sort(key=get_list_key)
+    # print(per_two_days)
+    for row in per_two_days:
+        print("\t".join([str(r) for r in row]))
 
-        # # Deep learning
-        # algorithm_tester.add_algorithm([
-        #     StrengthPredictor(learning_method="deep", aggregator=Aggregator(method="strength"),
-        #                       num_lags=1, pred_stride=0.5, fit_intercept=False,
-        #                       success_hardness_factor=1,
-        #                       no_channels=1)])
-
-        # algorithm_tester.test_algorithms(decision_aggregation_method="any2")
-
-        # test prediction on all columns
-        # for n in range(len(x[0])-1, len(x[0])):
-        # for n in range(1, len(x[0])):
-        #     logger("RESULTS").info("Average window index: {}".format(n-1))
-        #     nth_series = predictor.get_nth_column(x, n)
-        #     ### horizon
-        #     num_lags, pred_stride, fit_intercept, horizon = 0.1, 10, False, 0.5
-        #     data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # ### num_lags
-        # num_lags, pred_stride, fit_intercept, horizon = 7, 1, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # num_lags, pred_stride, fit_intercept, horizon = 5, 1, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # num_lags, pred_stride, fit_intercept, horizon = 3, 1, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # ### stride
-        # num_lags, pred_stride, fit_intercept, horizon = 3, 2, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # num_lags, pred_stride, fit_intercept, horizon = 3, 4, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # num_lags, pred_stride, fit_intercept, horizon = 3, 8, False, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-        # ### fit intercept
-        # num_lags, pred_stride, fit_intercept, horizon = 3, 8, True, 1
-        # data_handler.test_model_on_series(nth_series, num_lags, pred_stride, fit_intercept, horizon)
-
-    # # Update the mine data in the database
-    # mine_data_updater.update()
-    # #
-    # mine_database.print_all_raw_data_in_tsdb_format2()
-    # mine_database.print_all_raw_data()
-    # duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
-    # alg = Algorithm3Hour()
-    # tester = AlgorithmTester(duration_block_no_data, alg)
-    # results = []
-    # for result in tester.test_range(range_size=48):
-    #     results.append(result)
-    # logger("main").info("Testing ranges finished.")
-    #
-    # average = average_on_columns(results)
-    # minimums = min_on_columns(results)
-    # maximums = max_on_columns(results)
-    #
-    # logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
-    # logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
-    # logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
-    # logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
-
-    # # Optimize the prediction parameters based on the mine data and tests
-    # optimizer.optimize()
-    # # Create a working copy of the mine database
-    # mine_database.switch_to_temporary_copy()
-    # # Insert 100 new predictions into the mine data working copy
-    # predictor.extend_mine_data_by_prediction(100)
-    # # Generate plots
-    # plots.generate_plots()
 
 
 def test_db():
