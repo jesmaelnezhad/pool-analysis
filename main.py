@@ -552,6 +552,7 @@ def benchmark_algorithm_run_sample():
     # logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
     # logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
 
+
 if __name__ == "__main__":
     luck_average_windows = prepare_average_luck_windows()
     assessment_average_windows = prepare_average_assessment_windows()
@@ -675,6 +676,7 @@ if __name__ == "__main__":
     # predictor.extend_mine_data_by_prediction(100)
     # # Generate plots
     # plots.generate_plots()
+
 
 def test_db():
     mine_database.print_all_raw_data()
