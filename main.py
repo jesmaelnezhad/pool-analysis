@@ -534,31 +534,23 @@ def print_csv_data_tables(aggregation_data_window=1):
 
 
 def benchmark_algorithm_run_sample():
-    duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
-    alg = Algorithm3Hour()
-    tester = AlgorithmTester(duration_block_no_data, alg)
-    results = []
-    for result in tester.test_range(range_size=48):
-        results.append(result)
-    logger("main").info("Testing ranges finished.")
-
-    average = average_on_columns(results)
-    minimums = min_on_columns(results)
-    maximums = max_on_columns(results)
-
-    logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
-    logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
-    logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
-    logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
-
-    # # Optimize the prediction parameters based on the mine data and tests
-    # optimizer.optimize()
-    # # Create a working copy of the mine database
-    # mine_database.switch_to_temporary_copy()
-    # # Insert 100 new predictions into the mine data working copy
-    # predictor.extend_mine_data_by_prediction(100)
-    # # Generate plots
-    # plots.generate_plots()
+    pass
+    # duration_block_no_data = mine_database.get_columns(TICK_INFO_NEEDED_COLUMNS, 569)
+    # alg = Algorithm3Hour()
+    # tester = AlgorithmTester(duration_block_no_data, alg)
+    # results = []
+    # for result in tester.test_range(range_size=48):
+    #     results.append(result)
+    # logger("main").info("Testing ranges finished.")
+    #
+    # average = average_on_columns(results)
+    # minimums = min_on_columns(results)
+    # maximums = max_on_columns(results)
+    #
+    # logger("main").info("        \t\tCost\tReward\tLowest profit >> Profit << Highest profit")
+    # logger("main").info("Averages\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*average))
+    # logger("main").info("Minimums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*minimums))
+    # logger("main").info("Maximums\t|\t{0:.3f}\t{1:.3f}\t      {3:.3f} >> {2:.3f} << {4:.3f}".format(*maximums))
 
 if __name__ == "__main__":
     luck_average_windows = prepare_average_luck_windows()
